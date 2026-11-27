@@ -1,0 +1,44 @@
+name: PairDrop Universal Android 16
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: fm-sys/pairdrop-android
+          ref: v2.3.1
+          path: upstream
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Configure API 36
+        working-directory: upstream
+        run: |
+          sed -i 's/compileSdk 34/compileSdk 36/; s/targetSdkVersion 34/targetSdkVersion 36/; s/versionCode 45/versionCode 46/; s/versionName "2.3.1"/versionName "3.0.0-beta"/; s/applicationId "com.fmsys.snapdrop"/applicationId "com.fmsys.snapdrop.universal"/' app/build.gradle
+          sed -i 's/gradle:8.8.0/gradle:8.10.1/' build.gradle
+          sed -i 's/gradle-8.10.2-bin/gradle-8.11.1-bin/' gradle/wrapper/gradle-wrapper.properties
+      - name: Build and test
+        working-directory: upstream
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest assembleDebug --no-daemon
+      - name: Prepare artifacts
+        run: |
+          mkdir -p output
+          cp upstream/app/build/outputs/apk/debug/*.apk output/PairDrop-Universal-3.0.0-beta.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk
+          tar --exclude=.git --exclude=.gradle --exclude=build -czf output/PairDrop-Universal-source.tar.gz -C upstream .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PairDrop-Universal-Android16
+          path: output/
